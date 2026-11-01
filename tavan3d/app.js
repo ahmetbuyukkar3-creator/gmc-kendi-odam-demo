@@ -401,7 +401,7 @@ async function odaTara() {
   for (let i = 0; i < gray.length; i++) gray[i] = .299 * gi.data[i * 4] + .587 * gi.data[i * 4 + 1] + .114 * gi.data[i * 4 + 2];
   const t0 = performance.now(), indir = {};
   try {
-    if (!tarayici) tarayici = new Worker(new URL('./tarayici.js', import.meta.url), { type: 'module' });
+    if (!tarayici) tarayici = new Worker(new URL('./tarayici.js?v=2.1.1', import.meta.url), { type: 'module' });
     const m = await new Promise((res, rej) => {
       tarayici.onmessage = e => {
         const d = e.data; if (d.id !== no) return;
