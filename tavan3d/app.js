@@ -2445,7 +2445,7 @@ function taniYaz(emN) {
   if (!el) { el = document.createElement('div'); el.id = 'tani'; el.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;background:rgba(0,0,0,.72);color:#0f0;font:10px/1.35 monospace;padding:4px 6px;border-radius:5px;max-width:92vw;pointer-events:none;white-space:pre'; document.body.appendChild(el); }
   let wgl2 = '?', glErr = '?';
   try { const gl = R?.renderer?.getContext(); wgl2 = (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext) ? 1 : 0; glErr = gl ? gl.getError() : '-'; } catch { }
-  el.textContent = `iOS tani · WGL2:${wgl2} on:${S.on ? 1 : 0} fx:${S.fixtures.length} em:${emN ?? '-'} uC:${R?.uniforms?.uCount?.value ?? '-'} half:${IOS ? 1 : 0} glErr:${glErr}`;
+  el.textContent = `iOS tani · WGL2:${wgl2} cfg:${gmcCfg ? 1 : 0} on:${S.on ? 1 : 0} fx:${S.fixtures.length} em:${emN ?? '-'} uC:${R?.uniforms?.uCount?.value ?? '-'} half:${IOS ? 1 : 0} glErr:${glErr}`;
 }
 function paintLux() {
   const res = S.luxRes, sc = ISIK.SCALE[S.mode === 'vitrin' ? 'vitrin' : 'oda'];
@@ -2883,9 +2883,15 @@ if (GMC_MOD) {
     if (S.step === 3) gmcUygula(); else renderGmc();
   });
   renderGmc();
-  if (parent !== window) {                                // ilk tasarımı iste (iki köprü adı da desteklenir)
-    parent.postMessage({ tip: 'gmc-hazir' }, location.origin);
-    parent.postMessage({ tip: 'gmc-tavan-hazir' }, location.origin);
+  if (parent !== window) {                                // tasarımı iste (iki köprü adı da desteklenir)
+    // Panel, iframe yüklendiğinde tasarımı henüz yazmamış olabilir (özellikle iOS'ta geç); gelene kadar birkaç kez tekrar iste
+    let istek = 0;
+    const tasarimIste = () => {
+      parent.postMessage({ tip: 'gmc-hazir' }, location.origin);
+      parent.postMessage({ tip: 'gmc-tavan-hazir' }, location.origin);
+      if (!gmcCfg && ++istek < 10) setTimeout(tasarimIste, 350 + istek * 350);
+    };
+    tasarimIste();
   }
 }
 // Gömülüyken: belgenin tüm yüksekliğini ana sayfaya bildir; iframe içeriğe göre büyür, iç kaydırma olmaz.
