@@ -2438,9 +2438,9 @@ function computeLux() {
   paintLux(); renderLux();
   taniYaz(ems.length);
 }
-// iOS teşhisi: iPhone'da neyin boş kaldığını ekranda göster (düzeltince kaldırılacak). ?tani=0 ile kapatılır.
+// Teşhis okuması: varsayılan KAPALI; sorun olursa URL'ye ?tani=1 eklenince ekranın sol altında görünür.
 function taniYaz(emN) {
-  if (!IOS || GMC_Q.get('tani') === '0') return;
+  if (GMC_Q.get('tani') !== '1') return;
   let el = $('#tani');
   if (!el) { el = document.createElement('div'); el.id = 'tani'; el.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;background:rgba(0,0,0,.72);color:#0f0;font:10px/1.35 monospace;padding:4px 6px;border-radius:5px;max-width:92vw;pointer-events:none;white-space:pre'; document.body.appendChild(el); }
   let wgl2 = '?', glErr = '?';
