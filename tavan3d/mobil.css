@@ -1,0 +1,86 @@
+/* Mobil düzen (≤860 px). Masaüstü görünümü değişmez; renk ve yazı tipleri style.css ile aynı.
+   1. adım: yükleme düğmeleri en üstte, boş sahne gizli.
+   2-3. adım: sahne ekranın üstünde sabit kalır, panel altında kayar; ürün seçip hemen sahneye dokunulur. */
+.m-only{display:none!important}
+
+@media(max-width:860px){
+  .d-only{display:none!important}
+  .m-only{display:revert!important}
+  label.m-only.upload{display:grid!important}
+
+  /* iOS'ta yazı kutusuna dokununca sayfa yakınlaşmasın */
+  input,select{font-size:16px!important}
+
+  /* başlık: tek satır marka + tam genişlik adımlar */
+  .top{padding:8px 12px;gap:6px}
+  .brand{font-size:19px;gap:8px}
+  .brand small{display:none}
+  .dot{height:18px;width:8px}
+  .steps{width:100%;gap:5px}
+  .steps button{flex:1;padding:9px 4px;font-size:12.5px;white-space:nowrap}
+
+  .panel{padding:16px 16px 40px}
+  .step h2{font-size:19px}
+
+  /* ---- 1. adım: önce yükle ---- */
+  body[data-step="1"] .stage-wrap{display:none}
+  body:not([data-mode="vitrin"]) #step1{display:flex;flex-wrap:wrap;gap:10px}
+  body:not([data-mode="vitrin"]) #step1>*{width:100%;margin:0}
+  body:not([data-mode="vitrin"]) #step1 .st-head{order:1}
+  body:not([data-mode="vitrin"]) #step1 #dropZone{order:2}
+  body:not([data-mode="vitrin"]) #step1 .cam-btn{order:3}
+  body:not([data-mode="vitrin"]) #step1>.label{order:4;margin-top:8px}
+  body:not([data-mode="vitrin"]) #step1 .samples{order:5}
+  body:not([data-mode="vitrin"]) #step1 .guide-box{order:6;margin-top:4px}
+  body:not([data-mode="vitrin"]) #step1 .upload{width:calc(50% - 5px)}
+  .upload{padding:20px 8px;gap:6px;min-height:132px}
+  .upload strong{font-size:14px;line-height:1.25}
+  .upload small{font-size:11.5px}
+  .upload-ico{width:44px;height:44px;font-size:22px}
+  .cam-btn{background:#fff;border-color:var(--gold)}
+  .samples img{height:96px}
+
+  /* ---- 2-3. adım: sahne üstte sabit ---- */
+  body[data-step="2"] .stage-wrap,body[data-step="3"] .stage-wrap{position:sticky;top:0;z-index:10;background:#1b1e22;box-shadow:0 6px 18px #0003}
+  body[data-step="2"] .stage{height:min(100vw,56vh);min-height:0;flex:none}
+  body[data-step="3"] .stage{height:min(76vw,46vh);min-height:0;flex:none}
+  body[data-step="3"][data-view="plan"] .stage{height:min(100vw,54vh);min-height:0;flex:none}
+
+  /* sahne araçları: tek satır, yana kaydırılır */
+  .stage-bar{flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:6px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .stage-bar::-webkit-scrollbar{display:none}
+  .stage-bar>*{flex:0 0 auto}
+  .stage-bar .seg button{padding:8px 10px;white-space:nowrap}
+  .cmp{white-space:nowrap;padding:8px 11px}
+  .undo-bar{left:8px;bottom:8px}
+  .undo-bar button{padding:9px 12px;font-size:13px}
+  .toast{bottom:62px;font-size:13.5px;text-align:center}
+  .stage-banner{top:8px;font-size:12.5px}
+
+  /* dokunmaya uygun boyutlar */
+  .ghost,.primary,.danger{min-height:44px}
+  .seg button{min-height:38px}
+  .row{flex-wrap:wrap}
+  .row>button{flex:1 1 auto}
+  .unit input{padding:10px 12px}
+  input[type=range]{height:32px}
+  .chip{padding:7px 12px;font-size:12.5px}
+  .shape{padding:9px 2px}
+
+  /* ürünler: daha kısa liste */
+  .products{grid-template-columns:repeat(3,1fr);gap:6px}
+  .prod{padding:5px}
+  .prod img{height:54px}
+  .prod strong{font-size:11.5px}
+  .prod small{font-size:10.5px}
+  .systems .sys img{height:40px}
+
+  /* seçili öğe ayarları, sabit sahnenin altında görünsün */
+  #selTools{scroll-margin-top:calc(46vh + 64px)}
+  .aim select,.sel-tools select{min-height:40px}
+  .rotrow button{padding:9px 9px}
+}
+@media(max-width:360px){
+  .products{grid-template-columns:1fr 1fr}
+  .steps button{font-size:11.5px}
+}
