@@ -776,6 +776,15 @@ cc.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && !pla
 /* ---------------- adım 3: 3D sahne + ışık ---------------- */
 const MAXE = 256;                                       // ışık kaynakları dokuda tutulur; telefon ekran kartlarında da sığar
 let R = null; // renderer paketi
+// iOS Safari WebGL2, 32-bit float dokuyu texelFetch ile 0 örnekliyor (ışık hesabı kayboluyordu, lüks 0 çıkıyordu).
+// Çözüm: iOS'ta ışık dokusunu half-float tut (iPhone bunu sorunsuz örnekler; bu veri için hassasiyet fazlasıyla yeter). Android FloatType'ta kalır.
+const _fh = new Float32Array(1), _uh = new Uint32Array(_fh.buffer);
+function toHalf(v) {
+  _fh[0] = v; const x = _uh[0]; const s = (x >> 16) & 0x8000; let e = ((x >> 23) & 0xff) - 112, m = x & 0x7fffff;
+  if (e >= 31) { if (((x >> 23) & 0xff) === 0xff) return s | 0x7c00 | (m ? 0x200 : 0); return s | 0x7bff; }
+  if (e <= 0) { if (e < -10) return s; m |= 0x800000; const sh = 14 - e; let h = m >> sh; if ((m >> (sh - 1)) & 1) h += 1; return s | h; }
+  let h = (e << 10) | (m >> 13); if (m & 0x1000) h += 1; return s | h;
+}
 
 const CCT = { 3000: [1.32, .95, .55], 4000: [1.14, .98, .80], 6500: [.93, 1.0, 1.13] };
 const EMIT_HEX = { 3000: '#ffe2b0', 4000: '#f2f6ff', 6500: '#e6efff' };
@@ -852,8 +861,8 @@ function startGL() {
   }, { passive: false });
   controls.addEventListener('change', () => render());
 
-  const emData = new Float32Array(MAXE * 3 * 4);
-  const emTex = new THREE.DataTexture(emData, MAXE, 3, THREE.RGBAFormat, THREE.FloatType);
+  const emData = IOS ? new Uint16Array(MAXE * 3 * 4) : new Float32Array(MAXE * 3 * 4);
+  const emTex = new THREE.DataTexture(emData, MAXE, 3, THREE.RGBAFormat, IOS ? THREE.HalfFloatType : THREE.FloatType);
   emTex.minFilter = emTex.magFilter = THREE.NearestFilter; emTex.needsUpdate = true;
   const tex = new THREE.CanvasTexture(S.img);
   tex.colorSpace = THREE.NoColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -1160,11 +1169,14 @@ function updateLights() {
   const u = R.uniforms, tint = CCT[S.cct], d = R.emData;
   const em = S.on ? S.fixtures.flatMap(emittersFor) : [];
   if (em.length > MAXE) toast(`Çok fazla ürün: ilk ${MAXE} ışık kaynağı hesaplanıyor.`);
+  // 3 satırlık doku: [konum, k] [yön, koni dış] [renk×şiddet, koni iç]. iOS'ta half-float yaz.
+  const put = IOS
+    ? (off, a, b, c, w) => { d[off] = toHalf(a); d[off + 1] = toHalf(b); d[off + 2] = toHalf(c); d[off + 3] = toHalf(w); }
+    : (off, a, b, c, w) => { d[off] = a; d[off + 1] = b; d[off + 2] = c; d[off + 3] = w; };
   em.slice(0, MAXE).forEach((e, i) => {
-    // 3 satırlık doku: [konum, k] [yön, koni dış] [renk×şiddet, koni iç]
-    d.set([e.pos.x, e.pos.y, e.pos.z, e.k], i * 4);
-    d.set([e.dir.x, e.dir.y, e.dir.z, e.cone[0]], (MAXE + i) * 4);
-    d.set([tint[0] * e.cd, tint[1] * e.cd, tint[2] * e.cd, e.cone[1]], (2 * MAXE + i) * 4);
+    put(i * 4, e.pos.x, e.pos.y, e.pos.z, e.k);
+    put((MAXE + i) * 4, e.dir.x, e.dir.y, e.dir.z, e.cone[0]);
+    put((2 * MAXE + i) * 4, tint[0] * e.cd, tint[1] * e.cd, tint[2] * e.cd, e.cone[1]);
   });
   R.emTex.needsUpdate = true;
   u.uCount.value = Math.min(em.length, MAXE);
@@ -2424,6 +2436,16 @@ function computeLux() {
   const step = Math.max(.01, Math.max(rect.x1 - rect.x0, rect.z1 - rect.z0) / (vit ? 100 : 80));
   S.luxRes = ISIK.luxGrid(ems, rect, step, pass);
   paintLux(); renderLux();
+  taniYaz(ems.length);
+}
+// iOS teşhisi: iPhone'da neyin boş kaldığını ekranda göster (düzeltince kaldırılacak). ?tani=0 ile kapatılır.
+function taniYaz(emN) {
+  if (!IOS || GMC_Q.get('tani') === '0') return;
+  let el = $('#tani');
+  if (!el) { el = document.createElement('div'); el.id = 'tani'; el.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;background:rgba(0,0,0,.72);color:#0f0;font:10px/1.35 monospace;padding:4px 6px;border-radius:5px;max-width:92vw;pointer-events:none;white-space:pre'; document.body.appendChild(el); }
+  let wgl2 = '?', glErr = '?';
+  try { const gl = R?.renderer?.getContext(); wgl2 = (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext) ? 1 : 0; glErr = gl ? gl.getError() : '-'; } catch { }
+  el.textContent = `iOS tani · WGL2:${wgl2} on:${S.on ? 1 : 0} fx:${S.fixtures.length} em:${emN ?? '-'} uC:${R?.uniforms?.uCount?.value ?? '-'} half:${IOS ? 1 : 0} glErr:${glErr}`;
 }
 function paintLux() {
   const res = S.luxRes, sc = ISIK.SCALE[S.mode === 'vitrin' ? 'vitrin' : 'oda'];
