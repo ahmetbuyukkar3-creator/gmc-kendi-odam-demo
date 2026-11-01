@@ -10,6 +10,11 @@ const { nelderMead } = VIT;
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
+// iOS Safari: sekme belleği sert sınırlı; otomatik tarama modellerini daha küçük girdiyle, ölçülü çalıştır
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+// Önceki oturumda tarama sırasında sayfa yenilendiyse (iOS bellek taşması) iz kalır; açılışta oku, kullanıcıya göster
+let BELLEK_UYARISI = false;
+try { if (sessionStorage.getItem('tarama_calisti')) { BELLEK_UYARISI = true; sessionStorage.removeItem('tarama_calisti'); } } catch { }
 // GMC sitesi modu: WordPress "Kendi Odam" sekmesinde ?gmc=1 (bizim köprü) ya da ?entegre=1 (Erdem köprüsü) ile açılır; ray ve ürünler gmcled.com tasarım panelinden gelir (aşağıda köprü)
 const GMC_Q = new URLSearchParams(location.search);
 const GMC_MOD = GMC_Q.has('gmc') || GMC_Q.get('entegre') === '1';
@@ -360,6 +365,7 @@ async function loadPhoto(src, preset, f35 = null, opts = {}) {
   $('#credit').textContent = S.credit; $('#credit').hidden = !S.credit;
   S.lensMm = lensFromF35(f35 || 26);                     // EXIF yoksa telefon ana kamerası (~26 mm)
   S.photoWarn = opts.credit ? [] : photoChecks();      // hazır örneklerde yükleme uyarısı gösterme
+  if (BELLEK_UYARISI && !opts.credit) { S.photoWarn.unshift('Önceki denemede sayfa yenilendi (telefon belleği). Tekrar deniyoruz.'); BELLEK_UYARISI = false; }
   // Vitrin modunda örneğin lensi sadece başlangıç tahminidir; ölçüyle kalibrasyon fotoğraftan düzeltir
   if (opts.lensMm && (S.mode === 'oda' || opts.lensFixed)) { S.lensMm = opts.lensMm; S.lensSource = 'elle'; }
   else if (opts.lensMm) S.lensMm = opts.lensMm;
@@ -386,10 +392,11 @@ async function odaTara() {
   if (S.mode !== 'oda' || !S.img) return;
   const no = ++taramaNo;
   S.scan = { durum: 'calisiyor', yazi: 'Hazırlanıyor…' }; S.tavanMaske = null; renderPlaceUI(); drawCalib();
+  try { sessionStorage.setItem('tarama_calisti', '1'); } catch { }   // tarama sırasında sayfa yenilenirse (iOS bellek taşması) açılışta yakala
   const kucuk = lng => { const k = Math.min(1, lng / Math.max(S.W, S.H)), c = document.createElement('canvas');
     c.width = Math.round(S.W * k); c.height = Math.round(S.H * k); const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(S.img, 0, 0, c.width, c.height);
     return g.getImageData(0, 0, c.width, c.height); };
-  const foto = kucuk(1024), gi = kucuk(800);
+  const foto = kucuk(IOS ? 768 : 1024), gi = kucuk(IOS ? 640 : 800);
   const gray = new Uint8Array(gi.width * gi.height);
   for (let i = 0; i < gray.length; i++) gray[i] = .299 * gi.data[i * 4] + .587 * gi.data[i * 4 + 1] + .114 * gi.data[i * 4 + 2];
   const t0 = performance.now(), indir = {};
@@ -440,6 +447,8 @@ async function odaTara() {
     console.warn('[tarama] hata', err);
     S.scan = { durum: 'olmadi', yazi: `Otomatik tarama çalışmadı (${err.message}). Noktaları elle işaretleyebilirsin.` };
     renderPlaceUI(); drawCalib();
+  } finally {
+    try { sessionStorage.removeItem('tarama_calisti'); } catch { }
   }
 }
 $('#scanBtn').addEventListener('click', () => odaTara());
