@@ -15,12 +15,21 @@ const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(na
 // Önceki oturumda tarama sırasında sayfa yenilendiyse (iOS bellek taşması) iz kalır; açılışta oku, kullanıcıya göster
 let BELLEK_UYARISI = false;
 try { if (sessionStorage.getItem('tarama_calisti')) { BELLEK_UYARISI = true; sessionStorage.removeItem('tarama_calisti'); } } catch { }
+// iOS'ta sayfa yenilenerek açıldıysa (bellek baskısı) ayrıca yakala; açılışta doğrudan bilgi kutusu gösterilir
+let SAYFA_YENILENDI = false;
+if (IOS) {
+  try {
+    const nav = performance.getEntriesByType('navigation')[0];
+    SAYFA_YENILENDI = nav ? nav.type === 'reload' : (performance.navigation && performance.navigation.type === 1);
+  } catch { }
+}
 // GMC sitesi modu: WordPress "Kendi Odam" sekmesinde ?gmc=1 (bizim köprü) ya da ?entegre=1 (Erdem köprüsü) ile açılır; ray ve ürünler gmcled.com tasarım panelinden gelir (aşağıda köprü)
 const GMC_Q = new URLSearchParams(location.search);
 const GMC_MOD = GMC_Q.has('gmc') || GMC_Q.get('entegre') === '1';
 const GMC_GOMULU = GMC_MOD && parent !== window;        // sayfaya iframe ile gömülü (tam ekran değil)
 if (GMC_MOD) document.body.classList.add('gmc-mod');
 if (GMC_GOMULU) document.documentElement.classList.add('gmc-gomulu');
+if (IOS) document.documentElement.classList.add('gmc-ios');
 const GMC_P = {};                                        // panelden gelen ürünler (geri al / ileri al için)
 
 // Lümeni bilinmeyen ürün için yedek (artık her üründe lm var; urunler.js) [Tahmin]
@@ -449,6 +458,8 @@ async function odaTara() {
     renderPlaceUI(); drawCalib();
   } finally {
     try { sessionStorage.removeItem('tarama_calisti'); } catch { }
+    // iOS: worker bellekte kalmasın (Safari, ağır worker + büyük görsellerde sessizce sayfayı yeniliyor). Sonraki taramada yenisi kurulur.
+    if (IOS && tarayici) { try { tarayici.terminate(); } catch { } tarayici = null; }
   }
 }
 $('#scanBtn').addEventListener('click', () => odaTara());
@@ -473,6 +484,8 @@ function goStep(n) {
   $('#glHost').hidden = n !== 3;
   $('#stageBar').hidden = n !== 3;
   $('#undoBar').hidden = n === 1;
+  $('#toStep3Fab').hidden = n !== 2 || !S.cal;
+  if (n !== 2) $('#stageBanner').hidden = true;
   $('#planCanvas').hidden = n !== 3 || S.view !== 'plan';
   if (n !== 3) $('#split').hidden = true;
   if (matchMedia('(max-width:860px)').matches) scrollTo(0, 0);   // mobil: yeni adımda sahne ve başlık görünsün
@@ -827,14 +840,47 @@ function glowTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+function glHataGoster(mesaj) {
+  const host = $('#glHost');
+  if (!host) return;
+  $('#glHata')?.remove();
+  const kutu = document.createElement('div');
+  kutu.id = 'glHata';
+  kutu.style.cssText = 'position:absolute;inset:12px;z-index:20;display:flex;align-items:center;justify-content:center;background:#fff3cd;border:2px solid #d00;color:#7a5b00;padding:16px;text-align:center;font-weight:600;border-radius:8px;pointer-events:none;';
+  kutu.textContent = mesaj;
+  host.appendChild(kutu);
+}
+
 function startGL() {
   if (R && R.calRef === S.cal) { resizeGL(); buildFixtures(); return; }
   disposeGL();
+  $('#glHata')?.remove();
   const c = S.cal, host = $('#glHost');
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  } catch (err) {
+    console.warn('[gl] WebGL başlatılamadı', err);
+    const mesaj = '3B görünüm açılamadı (cihaz belleği/WebGL). Sayfayı yenileyip daha küçük fotoğrafla tekrar deneyin.';
+    glHataGoster(mesaj);
+    S.photoWarn = [...(S.photoWarn || []), mesaj];
+    if (S.step === 3) goStep(2);
+    return;
+  }
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   host.appendChild(renderer.domElement);
+  // iOS'ta bellek baskısı WebGL context'ini sessizce kaybettirir; boş sahne yerine kullanıcıyı bilgilendir, 2. adıma dön
+  renderer.domElement.addEventListener('webglcontextlost', e => {
+    e.preventDefault();
+    console.warn('[gl] webglcontextlost');
+    try { disposeGL(); } catch { R = null; }
+    $('#glHata')?.remove();
+    const mesaj = '3B görünümün belleği kesildi (telefon belleği). Sayfayı yenileyip daha küçük fotoğrafla tekrar deneyin.';
+    glHataGoster(mesaj);
+    S.photoWarn = [...(S.photoWarn || []), mesaj];
+    if (S.step === 3) goStep(2);
+  }, false);
 
   const scene = new THREE.Scene();
   const photoCam = new THREE.PerspectiveCamera(2 * Math.atan(S.H / 2 / c.f) * 180 / Math.PI, S.W / S.H, .05, 100);
@@ -2533,6 +2579,14 @@ $('#pngBtn').addEventListener('click', () => {
 
 new ResizeObserver(() => { if (S.step === 2) drawCalib(); if (S.step === 3) resizeGL(); }).observe($('#stage'));
 renderPanel(); dnLabel();
+// iOS'ta sayfa bellek baskısıyla yenilenerek açıldıysa kullanıcıyı doğrudan bilgilendir (tek seferlik, kalıcı kutu)
+if (SAYFA_YENILENDI) {
+  const kutu = document.createElement('div');
+  kutu.className = 'pwarn';
+  kutu.style.margin = '10px 0';
+  kutu.textContent = 'Sayfa telefon belleği nedeniyle yenilendi. Fotoğrafı tekrar yükleyip kaldığınız yerden devam edebilirsiniz.';
+  $('#dropZone').before(kutu);
+}
 
 /* ---- mobil: sahne üstte sabit; ürün seçince ne yapılacağını söyle, seçilen öğenin ayarlarını göster ---- */
 {
@@ -2898,7 +2952,9 @@ if (GMC_MOD) {
 if (GMC_GOMULU) {
   let sonH = 0;
   const bildirH = () => {
-    const h = Math.ceil(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, $('.layout')?.getBoundingClientRect().bottom || 0));
+    // iOS Safari'de documentElement.scrollHeight en az iframe'in eski yüksekliği kadar kalır.
+    // İçerik kısaldığında bu değer çerçevenin küçülmesini engeller; gövdenin gerçek ölçüsünü kullan.
+    const h = Math.ceil(document.body.getBoundingClientRect().height);
     if (h > 0 && Math.abs(h - sonH) > 2) { sonH = h; parent.postMessage({ tip: 'gmc-tavan-boyut', yukseklik: h }, location.origin); }
   };
   if (typeof ResizeObserver !== 'undefined') { const ro = new ResizeObserver(bildirH); ro.observe(document.body); const ly = $('.layout'); if (ly) ro.observe(ly); }
@@ -2906,6 +2962,8 @@ if (GMC_GOMULU) {
   addEventListener('load', bildirH);
   addEventListener('resize', bildirH);
   document.addEventListener('click', () => requestAnimationFrame(bildirH), true);
+  // Safari bazı görünürlük değişimlerinde ResizeObserver bildirimini atlayabiliyor.
+  setInterval(bildirH, 900);
   requestAnimationFrame(bildirH);
 }
 window.__app = { S, addRail, addOnRail, addFree, goStep, setView, setMode, applyVitLayout, gmcUygula, gmcTasarim: c => { gmcCfg = c; if (S.step === 3) gmcUygula(); else renderGmc(); } };
