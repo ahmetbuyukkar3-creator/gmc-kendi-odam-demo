@@ -46,6 +46,13 @@
 		kok.addEventListener('input', guncelle, true);
 		kok.addEventListener('change', guncelle, true);
 		if (typeof MutationObserver !== 'undefined') { new MutationObserver(guncelle).observe(kok, { childList: true, subtree: true, attributes: true, attributeFilter: ['value'] }); }
+		/* iOS Safari: panel .value'yu property olarak yazar (attribute değişmez) ve CustomEvent her zaman yakalanmayabilir;
+		   değeri sürekli yoklayıp değişince ilet → ürün ne zaman seçilirse seçilsin tasarım çerçeveye ulaşır. */
+		window.setInterval(function () {
+			if (!girdi || !yuklendi) { return; }
+			var v = girdi.value;
+			if (v && v !== sonJson) { mevcutTasarimiOku(); ilet(); }
+		}, 700);
 
 		window.addEventListener('message', function (olay) {
 			if (olay.origin !== window.location.origin || olay.source !== cerceve.contentWindow || !olay.data) { return; }
